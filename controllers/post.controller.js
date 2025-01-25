@@ -1,84 +1,93 @@
-
-
-import Post from "../models/post.model.js"
-import User from "../models/user.model.js"
-import ImageKit from 'imagekit'
+import Post from "../models/post.model.js";
+import User from "../models/user.model.js";
+import ImageKit from "imagekit";
 
 export const getPosts = async (req, res) => {
-    const posts = await Post.find()
-    
-    res.status(200).json(posts)
-}
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 2;
+
+  const posts = await Post.find()
+    .populate("user", "username")
+    .limit(limit)
+    .skip((page - 1) * limit);
+
+  const totalPosts = await Post.countDocuments();
+  const hasMore = page * limit < totalPosts;
+
+  res.status(200).json({ posts, hasMore });
+};
 
 export const getPost = async (req, res) => {
-    const post = await Post.findOne({ slug : req.params.slug})
-    req.status(200).json(post)
-}
+  const post = await Post.findOne({ slug: req.params.slug }).populate(
+    "user",
+    "username img"
+  );
+  res.status(200).json(post);
+};
 
 export const createPost = async (req, res) => {
+  //console.log("inside the createPost controller")
 
-    //console.log("inside the createPost controller")
+  const clerkUserId = req.auth.userId;
+  console.log("this is user id : " + clerkUserId);
 
-    const clerkUserId = req.auth.userId;
-   // console.log("this is user id : "+ clerkUserId)
+  // const clerkUserId = "user_2rTogyizbX0SMOD6yAo7WG3w3gM"
 
-   // const clerkUserId = "user_2rTogyizbX0SMOD6yAo7WG3w3gM"
+  //console.log(req.headers)
 
-    //console.log(req.headers)
+  if (!clerkUserId) {
+    return res.status(401).json("Not autheticated fuck you !");
+  }
 
-    if(!clerkUserId) {
-        return res.status(401).json("Not autheticated!")
-    }
+  const user = await User.findOne({ clerkUserId });
 
-    const user = await User.findOne({clerkUserId})
+  if (!user) {
+    return res.status(404).json("user not found");
+  }
 
-    if(!user){
-        return res.status(404).json("user not found")
-    }
+  let slug = req.body.title.replace(/ /g, "-").toLowerCase();
+  let existingPost = await Post.findOne({ slug });
 
-    let slug = req.body.title.replace(/ /g, "-").toLowerCase();
-    let existingPost = await Post.findOne({slug});
+  let counter = 2;
 
-    let counter = 2;
+  while (existingPost) {
+    slug = `${slug}-${counter}`;
+    existingPost = await Post.findOne({ slug });
+    counter++;
+  }
 
-    while (existingPost) {
-        slug = `${slug}-${counter}`;
-        existingPost = await Post.findOne({ slug })
-        counter++;
-    }
+  const newPost = new Post({ user: user._id, slug, ...req.body });
+  const post = await newPost.save();
 
-    
-    const newPost = new Post({user: user._id, slug,  ...req.body})
-    const post = await newPost.save();
-
-    res.status(200).json(post)
-}
+  res.status(200).json(post);
+};
 
 export const deletePost = async (req, res) => {
-    const clerkUserId = req.auth.userId;
+  const clerkUserId = req.auth.userId;
 
-    if(!clerkUserId){
-        return res.status(401).json("Not authenticated!")
-    }
-    const user = await User.findOne({clerkUserId})
-    const deletedPost = await Post.findByIdAndDelete({_id : req.params.id, user : user._id})
-
-
-    if(!deletedPost){
-        return res.status(403).json("You can delete only your posts")
-    }
-
-    res.status(200).json("post has been deleted")
-}
-
-const imagekit = new ImageKit({
-    urlEndpoint: process.env.IK_URL_ENDPOINT,
-    publicKey: process.env.IK_PUBLIC_KEY,
-    privateKey: process.env.IK_PRIVATE_KEY
+  if (!clerkUserId) {
+    return res.status(401).json("Not authenticated!");
+  }
+  const user = await User.findOne({ clerkUserId });
+  const deletedPost = await Post.findByIdAndDelete({
+    _id: req.params.id,
+    user: user._id,
   });
 
+  if (!deletedPost) {
+    return res.status(403).json("You can delete only your posts");
+  }
+
+  res.status(200).json("post has been deleted");
+};
+
+const imagekit = new ImageKit({
+  urlEndpoint: process.env.IK_URL_ENDPOINT,
+  publicKey: process.env.IK_PUBLIC_KEY,
+  privateKey: process.env.IK_PRIVATE_KEY,
+});
 
 export const uploadAuth = async (req, res) => {
-  const  result = imagekit.getAuthenticationParameters();
+  const result = imagekit.getAuthenticationParameters();
   res.send(result);
-}
+};

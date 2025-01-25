@@ -41,7 +41,7 @@ app.use(function (req, res, next) {
 // app.get('/auth-state', (req,res) => {
 //     const authState = req.auth;
 //     const userId = req.auth.userId;
-//    // console.log("the user id is "+userId)
+//     console.log("the user id is "+userId)
 
 //    if(!userId){
 //     console.log("you are not authoraized")
